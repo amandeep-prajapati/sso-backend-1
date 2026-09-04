@@ -1,0 +1,2 @@
+[2025-10-22T06:42:08.422Z] USER_LOGIN - User ID: 1, Email: nishant.vashisth@rupee112.com, Dashboard: 1, IP: unknown
+[2025-10-22T06:44:18.523Z] USER_LOGIN - User ID: 1, Email: nishant.vashisth@rupee112.com, Dashboard: 1, IP: unknown
