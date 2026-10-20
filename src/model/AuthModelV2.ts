@@ -5,7 +5,7 @@ import { profile } from 'console';
 export class AuthModelV2 {
 
   // Get user ID by baseline user ID and tenant ID
-  async getUserIdByBaselineAndTenant(baselineUserId: number, tenantId: number): Promise<{ mu_id: number; mu_email: string } | null> {
+  async getUserIdByBaselineAndTenant(baselineUserId: number, tenantId: number): Promise<number | null> {
     try {
       const query = `
         SELECT mu_id
@@ -52,7 +52,6 @@ export class AuthModelV2 {
     try {
       const query = `
         SELECT mu_id, mu_username, mu_email, mu_mobile, mu_mrt_id, mu_mp_id, mu_status, mu_deleted , mu_internal_type_id,mu_mat_id
-
         FROM master_users
         WHERE mu_id = ? AND mu_deleted = 0 AND mu_status = 1
       `;
@@ -83,16 +82,23 @@ export class AuthModelV2 {
   }
 
   // Update user OTP and expiry time
-  async updateUserOTP(userId: number, tenantId: number, otp: string, expiryTime: Date): Promise<void> {
+  async updateUserOTP(userId: number, tenantId: number, otp: string, expiryTime: Date): Promise<boolean> {
     try {
       const query = `
         UPDATE master_users
-        SET mu_otp = ?, mu_otp_expiry_time = ?
-        WHERE mu_id = ?
+        SET mu_otp = ?, mu_otp_expiry_time = ?,
+            mu_login_attempt = COALESCE(mu_login_attempt, 0) + 1
+        WHERE mu_id = ? AND mu_deleted = 0 AND mu_status = 1
+          AND COALESCE(mu_login_attempt, 0) < 3
       `;
 
-      await executeQuery(query, tenantId, [otp, expiryTime, userId]);
-      console.log(`OTP updated for user ${userId} in tenant ${tenantId}`);
+      const result = await executeQuery(query, tenantId, [otp, expiryTime, userId]);
+      console.log(`OTP updated for user ${userId} in tenant ${tenantId}. Affected rows: ${result?.affectedRows}`);
+      const updated = Boolean(result && result.affectedRows > 0);
+      if (updated) {
+        console.log(`OTP updated for user ${userId} in tenant ${tenantId}`);
+      }
+      return updated;
     } catch (error) {
       console.error('Error in updateUserOTP:', error);
       throw error;
@@ -155,7 +161,7 @@ export class AuthModelV2 {
     try {
       const query = `
         UPDATE master_users
-        SET mu_otp = NULL, mu_otp_expiry_time = NULL
+        SET mu_otp = NULL, mu_otp_expiry_time = NULL, mu_login_attempt = 0
         WHERE mu_id = ?
       `;
 

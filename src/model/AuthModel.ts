@@ -617,7 +617,7 @@ WHERE mu.mu_id = ?
     try {
       const query = `
         UPDATE master_users 
-        SET user_otp = NULL, user_expiry_time = NULL
+        SET user_otp = NULL, user_expiry_time = NULL, mu_login_attempt =0
         WHERE user_id = ?
       `;
 

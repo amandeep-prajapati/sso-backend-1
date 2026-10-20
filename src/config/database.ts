@@ -5,10 +5,10 @@ dotenv.config();
 
 // Tenant-specific database pools
 export const rupee112Pool = mysql.createPool({
-  host: process.env.RUPEE112_DB_HOST,
-  user: process.env.RUPEE112_DB_USER,
-  password: process.env.RUPEE112_DB_PASSWORD,
-  database: process.env.RUPEE112_DB_NAME,
+  host: process.env.RUPEE112_DB_HOST || process.env.RUPEEMITR_DB_HOST,
+  user: process.env.RUPEE112_DB_USER || process.env.RUPEEMITR_DB_USER,
+  password: process.env.RUPEE112_DB_PASSWORD || process.env.RUPEEMITR_DB_PASSWORD,
+  database: process.env.RUPEE112_DB_NAME || process.env.RUPEEMITR_DB_NAME,
   waitForConnections: true,
   connectionLimit: 20,
   queueLimit: 0
@@ -79,6 +79,16 @@ export const credMePool = mysql.createPool({
   user: process.env.CREDME_DB_USER,
   password: process.env.CREDME_DB_PASSWORD,
   database: process.env.CREDME_DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 20,
+  queueLimit: 0
+});
+
+export const salaryMantraPool = mysql.createPool({
+  host: process.env.SALARYMANTRA_DB_HOST,
+  user: process.env.SALARYMANTRA_DB_USER,
+  password: process.env.SALARYMANTRA_DB_PASSWORD,
+  database: process.env.SALARYMANTRA_DB_NAME,
   waitForConnections: true,
   connectionLimit: 20,
   queueLimit: 0
@@ -167,6 +177,13 @@ credMePool.getConnection().then((connection) => {
   connection.release();
 }).catch((error) => {
   console.error(`✗ Error connecting to BrightLoan DB:`, error.message || error);
+});
+
+salaryMantraPool.getConnection().then((connection) => {
+  console.log(`✓ ${process.env.SALARYMANTRA_DB_NAME} DB connected successfully`);
+  connection.release();
+}).catch((error) => {
+  console.error(`✗ Error connecting to SalaryMantra DB:`, error.message || error);
 });
 
 masterPool.getConnection().then((connection) => {

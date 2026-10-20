@@ -3,6 +3,8 @@ import cors from 'cors';
 // import helmet from 'helmet';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
+import { appendFileSync, mkdirSync } from 'node:fs';
+import path from 'node:path';
 
 import apiRoutes from './routes';
 import { ApiError } from './utils/ApiError';
@@ -17,10 +19,65 @@ import DatabaseConnection from './config/database';
 dotenv.config();
 const app: Application = express();
 const PORT = process.env.PORT || 5000;
+const accessLogPath = path.resolve(
+    process.env.API_ACCESS_LOG_PATH || path.join(process.cwd(), 'logs', 'api-requests.log')
+);
+
+const writeAccessLog = (entry: Record<string, unknown>): void => {
+    const line = JSON.stringify(entry);
+
+    try {
+        mkdirSync(path.dirname(accessLogPath), { recursive: true });
+        appendFileSync(accessLogPath, `${line}\n`, { encoding: 'utf8' });
+    } catch (error) {
+        // Keep stdout logging active if the configured file path is not writable.
+        console.error(`Unable to write API access log to ${accessLogPath}:`, error);
+    }
+
+    process.stdout.write(`${line}\n`);
+};
 
 // Trust proxy to get real client IP (important for IP restriction)
 // Use specific proxy configuration instead of true for security
 app.set('trust proxy', 1); // Trust first proxy
+
+// Write request logs to stdout so PM2 captures them in its app logs. Emit the
+// incoming event immediately (even if the client disconnects or the request
+// never finishes); log only the path to avoid recording query-string secrets.
+app.use((req: Request, res: Response, next) => {
+    const startedAt = Date.now();
+    const requestLog = {
+        timestamp: new Date().toISOString(),
+        event: 'http_request',
+        method: req.method,
+        path: req.originalUrl.split('?')[0],
+        ip: req.ip,
+        userAgent: req.get('user-agent')
+    };
+
+    writeAccessLog(requestLog);
+
+    let responseLogged = false;
+    const logResponse = (event: 'http_response' | 'http_request_aborted') => {
+        if (responseLogged) return;
+        responseLogged = true;
+        writeAccessLog({
+            timestamp: new Date().toISOString(),
+            event,
+            method: req.method,
+            path: req.originalUrl.split('?')[0],
+            statusCode: res.statusCode,
+            durationMs: Date.now() - startedAt
+        });
+    };
+
+    res.on('finish', () => logResponse('http_response'));
+    res.on('close', () => {
+        if (!res.writableFinished) logResponse('http_request_aborted');
+    });
+
+    next();
+});
 
 // Initialize database connection
 
@@ -127,6 +184,7 @@ app.listen(PORT, async () => {
     console.log(`Admin Manager Service running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`API access log file: ${accessLogPath}`);
     
     // Test database connection
     const isConnected = await dbConnection.testConnection();

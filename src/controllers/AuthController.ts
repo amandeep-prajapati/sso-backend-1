@@ -922,18 +922,33 @@ loginV2 = async (req: any, res: any): Promise<void> => {
   }
 };
 
-  // Send OTP V2 - No authentication required, uses tenant_id and user_id from body
-  sendOTPV2 = async (req: any, res: any): Promise<void> => {
+  // Shared V2 send/resend flow. V2 is public, so the user and tenant are
+  // resolved from the request body rather than a bearer token.
+  private issueOTPV2 = async (req: any, res: any, isResend: boolean): Promise<void> => {
     try {
       const { tenant_id, user_id, mu_baseline_user_id } = req.body;
 
-      let actualUserId = user_id;
+      if (!tenant_id || (!user_id && !mu_baseline_user_id)) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(
+          new ApiError(HTTP_STATUS.BAD_REQUEST, "tenant_id and user_id (or mu_baseline_user_id) are required")
+        );
+      }
+
+      const tenantId = Number(tenant_id);
+      if (isNaN(tenantId)) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(
+          new ApiError(HTTP_STATUS.BAD_REQUEST, "Invalid tenant_id")
+        );
+      }
+
+      let actualUserId = user_id ? Number(user_id) : undefined;
 
       // If mu_baseline_user_id is provided, get the actual user_id for this tenant
-      if (mu_baseline_user_id && tenant_id) {
-        console.log(`Send OTP V2 - Getting user_id using mu_baseline_user_id: ${mu_baseline_user_id}, tenant_id: ${tenant_id}`);
+      if (mu_baseline_user_id) {
+        const baselineUserId = Number(mu_baseline_user_id);
+        console.log(`${isResend ? 'Resend' : 'Send'} OTP V2 - Getting user_id using mu_baseline_user_id: ${baselineUserId}, tenant_id: ${tenantId}`);
         
-        const userIdFromBaseline = await this.authModelV2.getUserIdByBaselineAndTenant(mu_baseline_user_id, tenant_id);
+        const userIdFromBaseline = await this.authModelV2.getUserIdByBaselineAndTenant(baselineUserId, tenantId);
         
         if (!userIdFromBaseline) {
           return res.status(HTTP_STATUS.NOT_FOUND).json(
@@ -941,21 +956,21 @@ loginV2 = async (req: any, res: any): Promise<void> => {
           );
         }
         
-        actualUserId = userIdFromBaseline;
-        console.log(`Found actual user_id: ${actualUserId} for baseline_id: ${mu_baseline_user_id}`);
+        actualUserId = Number(userIdFromBaseline);
+        console.log(`Found actual user_id: ${actualUserId} for baseline_id: ${baselineUserId}`);
       }
 
       // Validate input
-      if (!tenant_id || !actualUserId) {
+      if (!actualUserId || isNaN(actualUserId)) {
         return res.status(HTTP_STATUS.BAD_REQUEST).json(
-          new ApiError(HTTP_STATUS.BAD_REQUEST, "tenant_id and user_id (or mu_baseline_user_id) are required")
+          new ApiError(HTTP_STATUS.BAD_REQUEST, "Valid user_id (or mu_baseline_user_id) is required")
         );
       }
 
-      console.log(`Send OTP V2 - tenant_id: ${tenant_id}, user_id: ${actualUserId}`);
+      console.log(`${isResend ? 'Resend' : 'Send'} OTP V2 - tenant_id: ${tenantId}, user_id: ${actualUserId}`);
 
       // Get user details from AuthModelV2
-      const user = await this.authModelV2.getUserByIdAndTenant(actualUserId, tenant_id);
+      const user = await this.authModelV2.getUserByIdAndTenant(actualUserId, tenantId);
 
       if (!user) {
         return res.status(HTTP_STATUS.NOT_FOUND).json(
@@ -969,7 +984,7 @@ loginV2 = async (req: any, res: any): Promise<void> => {
         );
       }
 
-      console.log(`Sending OTP V2 for user ${actualUserId}, tenant ${tenant_id}, email: ${user.mu_email}`);
+      console.log(`${isResend ? 'Resending' : 'Sending'} OTP V2 for user ${actualUserId}, tenant ${tenantId}, email: ${user.mu_email}`);
 
       // Generate 6-digit OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -982,13 +997,20 @@ loginV2 = async (req: any, res: any): Promise<void> => {
       console.log('Current time:', now.toISOString());
       console.log('Expiry time:', expiryTime.toISOString());
       console.log('=== END TIME DEBUG ===');
+      
+      // Atomically update the OTP and count this send, unless the user has
+      // already requested the maximum number without verifying one.
+      const otpUpdated = await this.authModelV2.updateUserOTP(actualUserId, tenantId, otp, expiryTime);
 
-      // Update user with OTP and expiry time
-      await this.authModelV2.updateUserOTP(actualUserId, tenant_id, otp, expiryTime);
+      if (!otpUpdated) {
+        return res.status(HTTP_STATUS.BAD_REQUEST).json(
+          new ApiError(HTTP_STATUS.BAD_REQUEST, "Maximum OTP requests exceeded. Please verify an OTP or contact support.")
+        );
+      }
 
       // Send OTP email
       const emailResult = await sendOTPEmail(
-        tenant_id,
+        tenantId,
         user.mu_email,
         otp,
         undefined,
@@ -1005,7 +1027,7 @@ loginV2 = async (req: any, res: any): Promise<void> => {
       if (user.mu_mobile) {
         console.log(`Sending OTP SMS to mobile: ${user.mu_mobile}`);
         const smsResult = await sendOTPSMS(
-          tenant_id,
+          tenantId,
           user.mu_mobile,
           otp,
           10
@@ -1018,11 +1040,11 @@ loginV2 = async (req: any, res: any): Promise<void> => {
 
       const response: SendOTPResponse = {
         success: true,
-        message: "OTP sent successfully",
+        message: isResend ? "OTP resent successfully" : "OTP sent successfully",
         data: {
           email: user.mu_email,
           expiry_time: expiryTime.toISOString(),
-          user_id: actualUserId// Return the actual user_id
+          user_id: actualUserId
         }
       };
 
@@ -1031,11 +1053,23 @@ loginV2 = async (req: any, res: any): Promise<void> => {
       );
 
     } catch (error: any) {
-      console.error("Send OTP V2 error:", error);
+      console.error(`${isResend ? 'Resend' : 'Send'} OTP V2 error:`, error);
       return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json(
         new ApiError(HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message || "Failed to send OTP")
       );
     }
+  };
+
+  // Send OTP V2 - No authentication required; uses tenant_id and user_id or
+  // mu_baseline_user_id from the request body.
+  sendOTPV2 = async (req: any, res: any): Promise<void> => {
+    return this.issueOTPV2(req, res, false);
+  };
+
+  // Resend OTP V2 follows the same public identity resolution, email/SMS
+  // delivery, and three-unverified-send limit as the initial send endpoint.
+  resendOTPV2 = async (req: any, res: any): Promise<void> => {
+    return this.issueOTPV2(req, res, true);
   };
 
   forgotPasswordV2 = async (req: any, res: any): Promise<void> => {
@@ -1106,12 +1140,14 @@ loginV2 = async (req: any, res: any): Promise<void> => {
 
     const requestedProductId = req.body.product_id || null;
 
-    let actualUserId = user_id;
+    const tenantId = Number(tenant_id);
+    let actualUserId = user_id ? Number(user_id) : undefined;
 
-    if (mu_baseline_user_id && tenant_id) {
-      console.log(`Verify OTP V2 - Getting user_id using mu_baseline_user_id: ${mu_baseline_user_id}, tenant_id: ${tenant_id}`);
+    if (mu_baseline_user_id && tenantId) {
+      const baselineUserId = Number(mu_baseline_user_id);
+      console.log(`Verify OTP V2 - Getting user_id using mu_baseline_user_id: ${baselineUserId}, tenant_id: ${tenantId}`);
 
-      const userIdFromBaseline = await this.authModelV2.getUserIdByBaselineAndTenant(mu_baseline_user_id, tenant_id);
+      const userIdFromBaseline = await this.authModelV2.getUserIdByBaselineAndTenant(baselineUserId, tenantId);
 
       if (!userIdFromBaseline) {
         return res.status(HTTP_STATUS.NOT_FOUND).json(
@@ -1119,19 +1155,19 @@ loginV2 = async (req: any, res: any): Promise<void> => {
         );
       }
 
-      actualUserId = userIdFromBaseline;
-      console.log(`Found actual user_id: ${actualUserId} for baseline_id: ${mu_baseline_user_id}`);
+      actualUserId = Number(userIdFromBaseline);
+      console.log(`Found actual user_id: ${actualUserId} for baseline_id: ${baselineUserId}`);
     }
 
-    if (!tenant_id || !actualUserId || !otp) {
+    if (!tenantId || !actualUserId || !otp) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json(
         new ApiError(HTTP_STATUS.BAD_REQUEST, "tenant_id, user_id (or mu_baseline_user_id), and otp are required")
       );
     }
 
-    console.log(`Verify OTP V2 - tenant_id: ${tenant_id}, user_id: ${actualUserId}`);
+    console.log(`Verify OTP V2 - tenant_id: ${tenantId}, user_id: ${actualUserId}`);
 
-    const user = await this.authModelV2.getUserByIdAndTenant(actualUserId, tenant_id);
+    const user = await this.authModelV2.getUserByIdAndTenant(actualUserId, tenantId);
 
     if (!user) {
       return res.status(HTTP_STATUS.NOT_FOUND).json(
@@ -1141,7 +1177,7 @@ loginV2 = async (req: any, res: any): Promise<void> => {
 
     console.log(`Found user: ${user.mu_email}, verifying OTP`);
 
-    const verificationResult = await this.authModelV2.verifyOTP(actualUserId, tenant_id, otp);
+    const verificationResult = await this.authModelV2.verifyOTP(actualUserId, tenantId, otp);
 
     if (!verificationResult.isValid) {
       return res.status(HTTP_STATUS.BAD_REQUEST).json(
@@ -1149,7 +1185,7 @@ loginV2 = async (req: any, res: any): Promise<void> => {
       );
     }
 
-    await this.authModelV2.clearUserOTP(actualUserId, tenant_id);
+    await this.authModelV2.clearUserOTP(actualUserId, tenantId);
 
 
     const jwtSecret = process.env.JWT_SECRET || "your-secret-key";
@@ -1386,7 +1422,7 @@ loginV2 = async (req: any, res: any): Promise<void> => {
         );
       }
 
-      actualUserId = userIdFromBaseline?.mu_id ?? userIdFromBaseline;
+      actualUserId = userIdFromBaseline;
       console.log(`Found actual user_id: ${actualUserId} for baseline_id: ${mu_baseline_user_id}`);
     }
 

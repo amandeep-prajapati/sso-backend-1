@@ -146,3 +146,9 @@ console.log(data);
 - `POST /auth/login-v2` - Login without token, returns user and tenant data
 - `POST /auth/verify-otp` - Verify OTP (V1, requires authentication)
 - `POST /auth/resend-otp` - Resend OTP (V1, requires authentication)
+
+## Resend OTP V2
+**Endpoint:** `POST /auth/resend-otp-v2`  
+**Authentication:** No bearer token required. This follows the V2 public OTP flow and identifies the user from `tenant_id` plus `user_id` or `mu_baseline_user_id` in the request body.
+
+The request body and delivery behavior are the same as `send-otp-v2`. A successful request returns `OTP resent successfully`. Resends count toward the same limit as sends: at most three OTP requests are allowed before one is successfully verified. Successful verification resets this counter.

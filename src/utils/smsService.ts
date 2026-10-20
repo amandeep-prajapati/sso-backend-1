@@ -152,6 +152,14 @@ export const getTenantSMSConfig = (tenantId?: number): TenantSMSConfig => {
       selectedDltEntityId = process.env.SMS_CREDME_DLT_ENTITY_ID;
       console.log(`Tenant ${tenantId} - Credme SMS config selected`);
       break;
+    case 10:
+      selectedApiKey = process.env.SALARYMANTRA_NOVA_SMS_API_KEY || process.env.NOVA_SMS_API_KEY || '';
+      selectedSmsHeaderKey = process.env.SMS_SALARYMANTRA_HEADER_KEY;
+      selectedTemplateId = process.env.SMS_SALARYMANTRA_TEMPLATE_ID;
+      selectedSenderId = 'SALMAN';
+      selectedDltEntityId = process.env.SMS_SALARYMANTRA_DLT_ENTITY_ID;
+      console.log(`Tenant ${tenantId} - SalaryMantra SMS config selected`);
+      break;
     default:
       selectedApiKey = process.env.NOVA_SMS_API_KEY || '';
       selectedSmsHeaderKey = process.env.NOVA_SMS_HEADER_KEY;

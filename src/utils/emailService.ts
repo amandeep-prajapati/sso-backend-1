@@ -262,6 +262,12 @@ export const getTenantEmailConfig = (tenantId?: number): TenantEmailConfig => {
       selectedFromEmail = process.env.CREDME_FROM_EMAIL || '';
       console.log(`Tenant ${tenantId} selected - Email API Key: Salary112, Key: ${selectedApiKey ? 'SET' : 'NOT SET'}`);
       break;
+
+    case 10:
+      selectedApiKey = process.env.SALARYMANTRA_EMAIL_API_KEY || '';
+      selectedFromEmail = process.env.SALARYMANTRA_FROM_EMAIL || '';
+      console.log(`Tenant ${tenantId} selected - Email API Key: SalaryMantra, Key: ${selectedApiKey ? 'SET' : 'NOT SET'}`);
+      break;
     default:
       selectedApiKey = process.env.EMAIL_API_KEY || '';
       selectedFromEmail = process.env.DEFAULT_FROM_EMAIL || '';
@@ -373,7 +379,8 @@ export const sendOTPEmail = async (
       6: 'TitanFincorp',
       7: 'KreditBuddha',
       8: 'Salary112',
-      9: 'Credme'
+      9: 'Credme',
+      10: 'SalaryMantra'
     };
     
     const companyName = companyNames[tenantId] || 'Lendix';

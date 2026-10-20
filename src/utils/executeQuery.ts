@@ -9,13 +9,16 @@ import {
   kreditBuddhaPool,
   salary112Pool,
   masterPool,
-  credMePool
+  credMePool,
+  salaryMantraPool
 } from '../config/database';
 
-export const executeQuery = async (query: string, tenantId?: number, params?: any[]): Promise<any> => {
+export const executeQuery = async (query: string, tenantId?: number | string, params?: any[]): Promise<any> => {
   let selectedPool: Pool;
   let tenantName: string;
-  switch (tenantId) {
+  const parsedTenantId = Number(tenantId);
+
+  switch (parsedTenantId) {
     case 1:
       selectedPool = rupee112Pool;
       tenantName = 'Rupee112';
@@ -52,8 +55,13 @@ export const executeQuery = async (query: string, tenantId?: number, params?: an
       selectedPool = credMePool;
       tenantName = 'CredMe';
       break;
+    case 10:
+      selectedPool = salaryMantraPool;
+      tenantName = 'SalaryMantra';
+      break;
     default:
-      return { error: true, message: `Invalid or missing tenant ID: ${tenantId}. Please provide a valid tenant ID (0 for Master, 1-9 for tenants).` };
+      console.error(`Invalid or missing tenant ID: ${tenantId}`);
+      throw new Error(`Invalid or missing tenant ID: ${tenantId}. Please provide a valid tenant ID (1-10 for tenants).`);
   }
   
 

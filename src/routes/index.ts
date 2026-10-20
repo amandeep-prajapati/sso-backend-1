@@ -13,7 +13,7 @@ router.post('/auth/send-otp-v2', authController.sendOTPV2);
 router.post('/auth/verify-otp-v2', authController.verifyOTPV2);
 router.post('/auth/forget-password', authController.forgotPasswordV2);
 router.post('/auth/update-password', authController.updatePasswordV2);
-router.post('/auth/resend-otp-v2', authController.sendOTPV2);
+router.post('/auth/resend-otp-v2', authController.resendOTPV2);
 router.post('/auth/logout', authController.logout);
 
 

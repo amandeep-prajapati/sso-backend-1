@@ -4,7 +4,7 @@ dotenv.config();
 
 /**
  * Get tenant IDs from environment variable
- * @returns Array of tenant IDs [1, 2, 3, 4, 5, 6, 7, 8]
+ * @returns Array of tenant IDs configured in the environment
  */
 export const getTenantIds = (): number[] => {
   const tenantIdsStr = process.env.TENANT_IDS;
@@ -36,7 +36,8 @@ export const getTenantNameById = (tenantId: number): string | null => {
     6: 'titanfincorp',
     7: 'kreditbuddha',
     8: 'salary112',
-    9: 'credme'
+    9: 'credme',
+    10: 'salarymantra'
   };
   return tenantMap[tenantId] || null;
 };

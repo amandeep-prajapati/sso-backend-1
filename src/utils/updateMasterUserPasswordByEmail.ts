@@ -16,7 +16,7 @@ export async function updateMasterUserPasswordByEmail(
 ): Promise<TenantPasswordUpdateResult[]> {
   const results: TenantPasswordUpdateResult[] = [];
 
-  for (let tenantId = 1; tenantId <= 9; tenantId++) {
+  for (let tenantId = 1; tenantId <= 10; tenantId++) {
     try {
       const query = `UPDATE master_users
                      SET mu_password = ?

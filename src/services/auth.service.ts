@@ -9,7 +9,7 @@ export class AuthService {
     return await this.authModel.authenticateUser(email, password, source);
   }
 
-  async validateDashboardAccess(roleName: string, dashboardType?: string) {
+  async validateDashboardAccess(roleName: string, dashboardType?: number) {
     return await this.authModel.validateDashboardAccess(roleName, dashboardType);
   }
 
@@ -31,8 +31,9 @@ export class AuthService {
 
   generateToken(payload: TokenPayload): string {
     const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
+    const expiresIn = (process.env.JWT_EXPIRES_IN || '24h') as jwt.SignOptions['expiresIn'];
     return jwt.sign(payload, jwtSecret, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+      expiresIn,
     });
   }
 
